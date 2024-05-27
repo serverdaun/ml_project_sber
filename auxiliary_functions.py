@@ -1,4 +1,6 @@
 import pandas as pd
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import StandardScaler
 
 
 class PreprocessingUtils:
@@ -27,5 +29,32 @@ class PreprocessingUtils:
     def missing_values_percentage(df: pd.DataFrame) -> None:
         missing_values_df_level = (df.notna().all(axis=1).sum() / df.shape[0]).round(2)
         print(f'Complete rows in percentage: {missing_values_df_level}')
+
         missing_values = ((df.isna().sum() / df.shape[0]) * 100).sort_values(ascending=False).round(2)
         print(f'Missing values in percentage:\n{missing_values[missing_values > 0]}')
+
+    @staticmethod
+    def categorical_feature_ohe(df, column) -> pd.DataFrame:
+        ohe = OneHotEncoder(sparse_output=False)
+
+        ohe.fit(df[[column]])
+        ohe_columns = ohe.transform(df[[column]])
+        ohe_df = pd.DataFrame(ohe_columns, columns=ohe.get_feature_names_out([column]))
+
+        df = pd.concat([df.reset_index(drop=True), ohe_df.reset_index(drop=True)], axis=1)
+        df = df.drop(columns=[column], axis=1)
+
+        return df
+
+    @staticmethod
+    def numerical_feature_std(df, column) -> pd.DataFrame:
+        std = StandardScaler()
+
+        std.fit(df[[column]])
+        std_column = std.transform(df[[column]])
+        ohe_df = pd.DataFrame(std_column, columns=std_column.get_feature_names_out([column]))
+
+        df = pd.concat([df.reset_index(drop=True), ohe_df.reset_index(drop=True)], axis=1)
+        df = df.drop(columns=[column], axis=1)
+
+        return df
