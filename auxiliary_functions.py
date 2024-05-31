@@ -1,6 +1,7 @@
 import pandas as pd
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.preprocessing import StandardScaler
+from category_encoders import TargetEncoder
 
 
 class PreprocessingUtils:
@@ -33,6 +34,19 @@ class PreprocessingUtils:
         missing_values = ((df.isna().sum() / df.shape[0]) * 100).sort_values(ascending=False).round(2)
         print(f'Missing values in percentage:\n{missing_values[missing_values > 0]}')
 
+    # @staticmethod
+    # def categorical_feature_ohe(df, column) -> pd.DataFrame:
+    #     ohe = OneHotEncoder(sparse_output=False)
+    #
+    #     ohe.fit(df[[column]])
+    #     ohe_columns = ohe.transform(df[[column]])
+    #     ohe_df = pd.DataFrame(ohe_columns, columns=ohe.get_feature_names_out([column]))
+    #
+    #     df = pd.concat([df.reset_index(drop=True), ohe_df.reset_index(drop=True)], axis=1)
+    #     df = df.drop(columns=[column], axis=1)
+    #
+    #     return df
+
     @staticmethod
     def categorical_feature_ohe(df, column) -> pd.DataFrame:
         ohe = OneHotEncoder(sparse_output=False)
@@ -42,6 +56,14 @@ class PreprocessingUtils:
         ohe_df = pd.DataFrame(ohe_columns, columns=ohe.get_feature_names_out([column]))
 
         df = pd.concat([df.reset_index(drop=True), ohe_df.reset_index(drop=True)], axis=1)
+        df = df.drop(columns=[column], axis=1)
+
+        return df
+
+    @staticmethod
+    def categorical_feature_te(df, column, target_feature='CR') -> pd.DataFrame:
+        te = TargetEncoder()
+        df[f'{column}_te'] = te.fit_transform(df[column], df[target_feature])
         df = df.drop(columns=[column], axis=1)
 
         return df
