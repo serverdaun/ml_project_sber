@@ -115,3 +115,7 @@ webcolors==1.13
 webencodings==0.5.1
 websocket-client==1.8.0
 widgetsnbextension==4.0.10
+
+dill~=0.3.8
+pydantic~=2.7.3
+fastapi~=0.111.0
