@@ -44,26 +44,55 @@ def get_unique_hits_cr(df: pd.DataFrame) -> pd.DataFrame:
     return unique_hits
 
 
-def merge_sessions_w_hits(sessions_df: pd.DataFrame, hits_df: pd.DataFrame) -> pd.DataFrame:
-    df = sessions_df.merge(hits_df, on='session_id', how='inner')
-    return df
+def filter_sessions_df(df: pd.DataFrame) -> pd.DataFrame:
+    """Removes unnecessary columns from a sessions DataFrame"""
+    df_filtered = df.copy()
+    columns_to_drop = [
+        'session_id',
+        'client_id',
+        'visit_date',
+        'visit_time',
+        'visit_number',
+        'device_model'
+    ]
+    return df_filtered.drop(columns_to_drop, axis=1)
+
+
+def fillna_utm_source(df: pd.DataFrame) -> pd.DataFrame:
+    df_filtered = df.copy()
+    df_filtered.utm_source = df_filtered.utm_source.fillna('(not set')
+    return df_filtered
 
 
 def main():
 
-    hits_df_pipeline = Pipeline([
+    # Preprocess file with hits to receive a list of sessions with target actions.
+    hits_df_pipeline = Pipeline(steps=[
         ('filter_hits_df', FunctionTransformer(filter_hits_df)),
         ('get_unique_hits_cr', FunctionTransformer(get_unique_hits_cr))
     ])
 
     unique_hits_cr = hits_df_pipeline.fit_transform(pd.read_csv(filepath_or_buffer=HITS_PATH))
 
-    # numerical_features = make_column_selector(dtype_include=['int64', 'float64'])
-    # categorical_features = make_column_selector(dtype_include=['object'])
-    #
-    # unique_value_counts = df[categorical_features].nunique()
-    # low_cardinality_cat_features = unique_value_counts[unique_value_counts <= 400].index.tolist()
-    # high_cardinality_cat_features = unique_value_counts[unique_value_counts > 400].index.tolist()
+    # Add CR flags to sessions DataFrame
+    sessions_df = pd.read_csv(filepath_or_buffer=SESSIONS_PATH)
+    df = pd.merge(sessions_df, unique_hits_cr, on='session_id', how='inner')
+
+    x = df.drop(['CR'], axis=1)
+    y = df['CR']
+
+    # Separate features for categorical (low and high cardinality) and numerical
+    numerical_features = make_column_selector(dtype_include=['int64', 'float64'])
+    categorical_features = make_column_selector(dtype_include=['object'])
+
+    unique_value_counts = df[categorical_features].nunique()
+    low_cardinality_cat_features = unique_value_counts[unique_value_counts <= 400].index.tolist()
+    high_cardinality_cat_features = unique_value_counts[unique_value_counts > 400].index.tolist()
+
+    preprocessor = Pipeline(steps=[
+        ('filter_sessions_df', FunctionTransformer(filter_sessions_df)),
+        ('fillna_utm_source', FunctionTransformer(fillna_utm_source))
+    ])
 
 
 if __name__ == '__main__':
