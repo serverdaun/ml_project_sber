@@ -1,18 +1,22 @@
 import datetime
 import dill
 import pandas as pd
-from auxiliary_functions import PreprocessingUtils
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler, FunctionTransformer, OneHotEncoder
-from sklearn.model_selection import cross_val_score
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer, make_column_selector
-from sklearn.svm import SVC
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.model_selection import cross_val_score
+from category_encoders import TargetEncoder
 
 HITS_PATH = '../data/skillbox_diploma_main_dataset_sberautopodpiska/ga_hits-002.csv'
 SESSIONS_PATH = '../data/skillbox_diploma_main_dataset_sberautopodpiska/ga_sessions.csv'
+SOCIAL_MEDIA_SOURCES = [
+    'QxAxdyPLuQMEcrdZWdWb', 'MvfHsxITijuriZxsqZqt', 'ISrKoXQCxqqYvAZICvjs',
+    'IZEXUFLARCUMynmHNBGo', 'PlbkrSYoHuZBWfYjYnfw', 'gVRrcxiDQubJiljoTbGm'
+]
+TOP_BROWSERS = ['chrome', 'safari', 'firefox']
+POPULAR_BRANDS = ['samsung', 'apple', 'xiaomi', 'huawei']
 TARGET_EVENTS = [
     'sub_car_claim_click', 'sub_car_claim_submit_click',
     'sub_open_dialog_click', 'sub_custom_question_submit_click',
@@ -46,7 +50,7 @@ def get_unique_hits_cr(df: pd.DataFrame) -> pd.DataFrame:
 
 def filter_sessions_df(df: pd.DataFrame) -> pd.DataFrame:
     """Removes unnecessary columns from a sessions DataFrame"""
-    df_filtered = df.copy()
+    df_upd = df.copy()
     columns_to_drop = [
         'session_id',
         'client_id',
@@ -55,17 +59,64 @@ def filter_sessions_df(df: pd.DataFrame) -> pd.DataFrame:
         'visit_number',
         'device_model'
     ]
-    return df_filtered.drop(columns_to_drop, axis=1)
+    return df_upd.drop(columns_to_drop, axis=1)
 
 
-def fillna_utm_source(df: pd.DataFrame) -> pd.DataFrame:
-    df_filtered = df.copy()
-    df_filtered.utm_source = df_filtered.utm_source.fillna('(not set')
-    return df_filtered
+def fillna_device_os(df: pd.DataFrame) -> pd.DataFrame:
+    # Fillna for Apple gadgets
+    df_upd = df.copy()
+    df_upd.loc[(df_upd.device_os.isna()) & (df_upd.device_brand == 'Apple'), 'device_os'] = 'iOS'
+
+    # Fillna for Android based gadgets
+    android_based = ['Samsung', 'Xiaomi', 'Huawei', 'Realme']
+    df_upd.loc[
+        (df_upd.device_os.isna()) & (df_upd.device_brand.isin(android_based)), 'device_os'] = 'Android'
+
+    return df_upd
+
+
+def is_organic(df: pd.DataFrame) -> pd.DataFrame:
+    df_upd = df.copy()
+    df_upd.loc[:, 'is_organic'] = df_upd['utm_medium'].apply(
+        lambda x: 1 if x in ('organic', 'referral', '(none)') else 0)
+    return df_upd
+
+
+def in_app_browser(df: pd.DataFrame) -> pd.DataFrame:
+    df_upd = df.copy()
+    df_upd.loc[:, 'in_app_browser'] = df_upd.device_browser.apply(
+        lambda x: 1 if x == 'safari (in-app)' or '.' in x else 0
+    )
+    return df_upd
+
+
+def is_social_media_ad(df: pd.DataFrame) -> pd.DataFrame:
+    df_upd = df.copy()
+    df_upd.loc[:, 'is_social_media_ad'] = df_upd['utm_source'].apply(lambda x: 1 if x in SOCIAL_MEDIA_SOURCES else 0)
+    return df_upd
+
+
+def is_top_browser(df: pd.DataFrame) -> pd.DataFrame:
+    df_upd = df.copy()
+    df_upd.loc[:, 'is_top_browser'] = df_upd.device_browser.apply(lambda x: 1 if x in TOP_BROWSERS else 0)
+    return df_upd
+
+
+def is_popular_brand(df: pd.DataFrame) -> pd.DataFrame:
+    df_upd = df.copy()
+    df_upd.loc[:, 'is_popular_brand'] = df_upd.device_brand.apply(lambda x: 1 if x in POPULAR_BRANDS else 0)
+    return df_upd
+
+
+def create_screen_dimensions(df: pd.DataFrame) -> pd.DataFrame:
+    df_upd = df.copy()
+    df_upd.loc[:, 'screen_width'] = df_upd.device_screen_resolution.apply(lambda x: x.split('x')[0]).astype('int')
+    df_upd.loc[:, 'screen_height'] = df_upd.device_screen_resolution.apply(lambda x: x.split('x')[1]).astype('int')
+    df_upd = df_upd.drop(columns=['device_screen_resolution'], axis=1)
+    return df_upd
 
 
 def main():
-
     # Preprocess file with hits to receive a list of sessions with target actions.
     hits_df_pipeline = Pipeline(steps=[
         ('filter_hits_df', FunctionTransformer(filter_hits_df)),
@@ -91,8 +142,59 @@ def main():
 
     preprocessor = Pipeline(steps=[
         ('filter_sessions_df', FunctionTransformer(filter_sessions_df)),
-        ('fillna_utm_source', FunctionTransformer(fillna_utm_source))
+        ('fillna_device_os', FunctionTransformer(fillna_device_os)),
+        ('is_organic', FunctionTransformer(is_organic)),
+        ('is_social_media_ad', FunctionTransformer(is_social_media_ad)),
+        ('in_app_browser', FunctionTransformer(in_app_browser)),
+        ('is_top_browser', FunctionTransformer(is_top_browser)),
+        ('is_popular_brand', FunctionTransformer(is_popular_brand)),
+        ('create_screen_dimensions', FunctionTransformer(create_screen_dimensions))
     ])
+
+    low_card_cat_transformer = Pipeline(steps=[
+        ('imputer', SimpleImputer(strategy='constant', fill_value='(not set)')),
+        ('ohe_encoder', OneHotEncoder(handle_unknown='ignore'))
+    ])
+
+    high_card_cat_transformer = Pipeline(steps=[
+        ('imputer', SimpleImputer(strategy='constant', fill_value='(not set)')),
+        ('te_encoder', TargetEncoder())
+    ])
+
+    numerical_transformer = Pipeline(steps=[
+        ('scaler', StandardScaler())
+    ])
+
+    preprocessor2 = ColumnTransformer(transformers=[
+        ('low_card_cat', low_card_cat_transformer, low_cardinality_cat_features),
+        ('high_card_cat', high_card_cat_transformer, high_cardinality_cat_features),
+        ('numerical_transform', numerical_transformer, numerical_features)
+    ])
+
+    model = GradientBoostingClassifier()
+
+    pipe = Pipeline(steps=[
+        ('preprocessor', preprocessor),
+        ('preprocessor2', preprocessor2),
+        ('classifier', model)
+    ])
+    score = cross_val_score(pipe, x, y, cv=5, scoring='roc_auc')
+    print(f'model: {type(model).__name__}, ROC-AUC mean: {score.mean():.2f}, std: {score.std():.2f}')
+
+    pipe.fit(x, y)
+
+    with open('model.pkl', 'wb') as file:
+        dill.dump({
+            'model': pipe,
+            'metadata': {
+                'name': 'Target even prediction model',
+                'author': 'Vasilii Tokarev',
+                'version': 1.0,
+                'date': datetime.datetime.now(),
+                'type': type(pipe.named_steps["classifier"]).__name__,
+                'accuracy': score.mean()
+            }
+        }, file, recurse=True)
 
 
 if __name__ == '__main__':
