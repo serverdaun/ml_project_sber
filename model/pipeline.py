@@ -6,7 +6,7 @@ from sklearn.preprocessing import StandardScaler, FunctionTransformer, OneHotEnc
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer, make_column_selector
 from sklearn.ensemble import GradientBoostingClassifier
-from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import cross_val_score, StratifiedKFold
 from category_encoders import TargetEncoder
 
 HITS_PATH = '../data/skillbox_diploma_main_dataset_sberautopodpiska/ga_hits-002.csv'
@@ -59,7 +59,8 @@ def filter_sessions_df(df: pd.DataFrame) -> pd.DataFrame:
         'visit_number',
         'device_model'
     ]
-    return df_upd.drop(columns_to_drop, axis=1)
+    df_upd = df_upd.drop(columns_to_drop, axis=1)
+    return df_upd
 
 
 def fillna_device_os(df: pd.DataFrame) -> pd.DataFrame:
@@ -112,7 +113,7 @@ def create_screen_dimensions(df: pd.DataFrame) -> pd.DataFrame:
     df_upd = df.copy()
     df_upd.loc[:, 'screen_width'] = df_upd.device_screen_resolution.apply(lambda x: x.split('x')[0]).astype('int')
     df_upd.loc[:, 'screen_height'] = df_upd.device_screen_resolution.apply(lambda x: x.split('x')[1]).astype('int')
-    df_upd = df_upd.drop(columns=['device_screen_resolution'], axis=1)
+    # df_upd = df_upd.drop(columns=['device_screen_resolution'], axis=1)
     return df_upd
 
 
@@ -123,11 +124,12 @@ def main():
         ('get_unique_hits_cr', FunctionTransformer(get_unique_hits_cr))
     ])
 
-    unique_hits_cr = hits_df_pipeline.fit_transform(pd.read_csv(filepath_or_buffer=HITS_PATH))
+    unique_hits_cr = hits_df_pipeline.fit_transform(pd.read_csv(filepath_or_buffer=HITS_PATH, dtype=str))
 
     # Add CR flags to sessions DataFrame
-    sessions_df = pd.read_csv(filepath_or_buffer=SESSIONS_PATH)
+    sessions_df = pd.read_csv(filepath_or_buffer=SESSIONS_PATH, dtype=str)
     df = pd.merge(sessions_df, unique_hits_cr, on='session_id', how='inner')
+    df = filter_sessions_df(df)
 
     x = df.drop(['CR'], axis=1)
     y = df['CR']
@@ -141,7 +143,7 @@ def main():
     high_cardinality_cat_features = unique_value_counts[unique_value_counts > 400].index.tolist()
 
     preprocessor = Pipeline(steps=[
-        ('filter_sessions_df', FunctionTransformer(filter_sessions_df)),
+        # ('filter_sessions_df', FunctionTransformer(filter_sessions_df)),
         ('fillna_device_os', FunctionTransformer(fillna_device_os)),
         ('is_organic', FunctionTransformer(is_organic)),
         ('is_social_media_ad', FunctionTransformer(is_social_media_ad)),
@@ -178,21 +180,22 @@ def main():
         ('preprocessor2', preprocessor2),
         ('classifier', model)
     ])
-    score = cross_val_score(pipe, x, y, cv=5, scoring='roc_auc')
-    print(f'model: {type(model).__name__}, ROC-AUC mean: {score.mean():.2f}, std: {score.std():.2f}')
+
+    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    roc_auc_scores = cross_val_score(pipe, x, y, cv=cv, scoring='roc_auc')
+    print(f'Mean ROC-AUC score: {roc_auc_scores.mean():.4f}')
 
     pipe.fit(x, y)
-
     with open('model.pkl', 'wb') as file:
         dill.dump({
             'model': pipe,
             'metadata': {
-                'name': 'Target even prediction model',
+                'name': 'Target event prediction model',
                 'author': 'Vasilii Tokarev',
                 'version': 1.0,
                 'date': datetime.datetime.now(),
                 'type': type(pipe.named_steps["classifier"]).__name__,
-                'accuracy': score.mean()
+                'score': roc_auc_scores.mean()
             }
         }, file, recurse=True)
 
