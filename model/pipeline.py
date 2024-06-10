@@ -195,7 +195,7 @@ def main():
                 'version': 1.0,
                 'date': datetime.datetime.now(),
                 'type': type(pipe.named_steps["classifier"]).__name__,
-                'score': roc_auc_scores.mean()
+                'score': roc_auc_scores.mean().round(2),
             }
         }, file, recurse=True)
 
