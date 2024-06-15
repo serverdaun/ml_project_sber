@@ -48,9 +48,9 @@ def version():
 @app.post('/predict', response_model=Predict)
 def predict(form: Form):
     df = pd.DataFrame.from_dict([form.model_dump()])
-    y = model.predict(df)
+    y = model['model'].predict(df)
 
     return {
-        'id': form.session_id,
-        'prediction': y[0]
+        'session_id': form.session_id,
+        'CR': y[0]
     }
