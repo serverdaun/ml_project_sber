@@ -8,7 +8,16 @@
 
 
 ## Introduction
-A brief description of the project, its purpose, and goals. Explain what problem it solves and its importance.
+This project involves developing a machine learning model for a car subscription service.
+The main task is to predict whether a user will perform a target action on the company's website.
+Key aspects of the project include:
+
+1. Working with Google Analytics data to analyze user behavior on the website.
+2. Developing a predictive model to determine if a user will perform a target action (e.g., submitting an application or requesting a call).
+3. The goal is to achieve a ROC-AUC score of approximately 0.65.
+4. Creating a service that takes input features such as UTM parameters, device information, and geo data, and outputs a binary prediction (0 or 1) indicating whether the user is likely to perform a target action.
+5. The project requires data preprocessing, feature engineering, model selection, and API implementation.
+
 
 ## Project Structure
 - **data/skillbox_diploma_main_dataset_sberautopodpiska** # Contains two datasets: information about sessions and information about hits
