@@ -1,6 +1,7 @@
 import datetime
 import dill
 import pandas as pd
+import numpy as np
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler, FunctionTransformer, OneHotEncoder
 from sklearn.pipeline import Pipeline
@@ -134,6 +135,9 @@ def main():
     x = df.drop(['CR'], axis=1)
     y = df['CR']
 
+    sample_weights = np.ones(len(y))
+    sample_weights[y == 1] = 25
+
     # Separate features for categorical (low and high cardinality) and numerical
     numerical_features = make_column_selector(dtype_include=['int64', 'float64'])
     categorical_features = make_column_selector(dtype_include=['object'])
@@ -142,8 +146,8 @@ def main():
     low_cardinality_cat_features = unique_value_counts[unique_value_counts <= 400].index.tolist()
     high_cardinality_cat_features = unique_value_counts[unique_value_counts > 400].index.tolist()
 
+    # Create pipelines for the final process
     preprocessor = Pipeline(steps=[
-        # ('filter_sessions_df', FunctionTransformer(filter_sessions_df)),
         ('fillna_device_os', FunctionTransformer(fillna_device_os)),
         ('is_organic', FunctionTransformer(is_organic)),
         ('is_social_media_ad', FunctionTransformer(is_social_media_ad)),
@@ -182,10 +186,11 @@ def main():
     ])
 
     cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-    roc_auc_scores = cross_val_score(pipe, x, y, cv=cv, scoring='roc_auc')
+    roc_auc_scores = cross_val_score(pipe, x, y, cv=cv, scoring='roc_auc',
+                                     fit_params={'classifier__sample_weight': sample_weights})
     print(f'Mean ROC-AUC score: {roc_auc_scores.mean():.4f}')
 
-    pipe.fit(x, y)
+    pipe.fit(x, y, fit_params={'classifier__sample_weight': sample_weights})
     with open('model.pkl', 'wb') as file:
         dill.dump({
             'model': pipe,

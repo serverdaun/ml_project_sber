@@ -7,7 +7,7 @@ from sklearn.preprocessing import StandardScaler
 from category_encoders import TargetEncoder
 
 
-class PreprocessingUtils:
+class Utils:
 
     @staticmethod
     def check_duplicates(df: pd.DataFrame) -> None:
