@@ -187,10 +187,10 @@ def main():
 
     cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     roc_auc_scores = cross_val_score(pipe, x, y, cv=cv, scoring='roc_auc',
-                                     fit_params={'classifier__sample_weight': sample_weights})
+                                     params={'classifier__sample_weight': sample_weights})
     print(f'Mean ROC-AUC score: {roc_auc_scores.mean():.4f}')
 
-    pipe.fit(x, y, fit_params={'classifier__sample_weight': sample_weights})
+    pipe.fit(x, y, classifier__sample_weight=sample_weights)
     with open('model.pkl', 'wb') as file:
         dill.dump({
             'model': pipe,
