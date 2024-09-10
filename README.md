@@ -56,7 +56,7 @@ of the calls.
   - 'http://127.0.0.1:8000/status' to get the status of the app
   - 'http://127.0.0.1:8000/version' to get model metadata 
 - POST
-  - http://127.0.0.1:8000/predict to make predictions with json format data in body
+  - 'http://127.0.0.1:8000/predict' to make predictions with json format data in body
 
 3. Example data for API
     ```sh
